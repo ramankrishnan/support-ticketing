@@ -1,0 +1,151 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Student Support Ticketing</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<div class="topbar">
+  <h1>Campus Support Desk</h1>
+  <div class="subtitle">Student Support &amp; Ticket Management</div>
+</div>
+
+<div class="container">
+
+  <div class="card">
+    <h2>Create New Ticket</h2>
+    <form id="ticketForm">
+      <div class="field">
+        <label>Title</label>
+        <input type="text" id="title" placeholder="e.g. Unable to download marksheet" required>
+      </div>
+      <div class="field">
+        <label>Description</label>
+        <textarea id="description" placeholder="Add any relevant details"></textarea>
+      </div>
+      <div class="field">
+        <label>Category</label>
+        <select id="category" required>
+          <option value="">Select category</option>
+          <option value="fees">Fees</option>
+          <option value="attendance">Attendance</option>
+          <option value="id_card">ID Card</option>
+          <option value="documents">Documents</option>
+          <option value="certificates">Certificates</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Priority</label>
+        <select id="priority" required>
+          <option value="">Select priority</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Raised By (Student)</label>
+        <select id="created_by" required>
+          <option value="">Select student</option>
+        </select>
+      </div>
+      <button type="submit" class="btn">Create Ticket</button>
+      <div id="msg" class="msg"></div>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="toolbar">
+      <h2 style="margin:0;">All Tickets</h2>
+      <div class="actions">
+        <label><input type="checkbox" id="overdueOnly" onchange="loadTickets()"> Overdue only</label>
+        <button class="btn btn-secondary" onclick="loadTickets()">Refresh</button>
+      </div>
+    </div>
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Title</th><th>Category</th><th>Priority</th><th>Status</th><th>Assigned To</th><th>Due By</th></tr>
+      </thead>
+      <tbody id="ticketTableBody"></tbody>
+    </table>
+  </div>
+
+</div>
+
+<script>
+const API = '/api';
+
+async function loadUsers() {
+  const res = await fetch(`${API}/users?role=student`);
+  const data = await res.json();
+  const select = document.getElementById('created_by');
+  data.users.forEach(u => {
+    const opt = document.createElement('option');
+    opt.value = u.id;
+    opt.textContent = u.name;
+    select.appendChild(opt);
+  });
+}
+
+async function loadTickets() {
+  const overdue = document.getElementById('overdueOnly').checked;
+  const url = overdue ? `${API}/tickets?overdue=true` : `${API}/tickets`;
+  const res = await fetch(url);
+  const data = await res.json();
+  const tbody = document.getElementById('ticketTableBody');
+  tbody.innerHTML = '';
+
+  data.tickets.forEach(t => {
+    const isOverdue = new Date(t.due_by) < new Date() && !['resolved', 'closed'].includes(t.status);
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>${t.id}</td>
+      <td><a class="ticket-link" href="/ticket.html?id=${t.id}">${t.title}</a></td>
+      <td>${t.category}</td>
+      <td><span class="pill priority-${t.priority}">${t.priority}</span></td>
+      <td><span class="pill status-${t.status}">${t.status.replace('_',' ')}</span></td>
+      <td>${t.assigned_to ?? '—'}</td>
+      <td>${new Date(t.due_by).toLocaleString()} ${isOverdue ? '<span class="overdue-tag">OVERDUE</span>' : ''}</td>
+    `;
+    tbody.appendChild(row);
+  });
+}
+
+document.getElementById('ticketForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const body = {
+    title: document.getElementById('title').value,
+    description: document.getElementById('description').value,
+    category: document.getElementById('category').value,
+    priority: document.getElementById('priority').value,
+    created_by: Number(document.getElementById('created_by').value)
+  };
+
+  const res = await fetch(`${API}/tickets`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  const data = await res.json();
+
+  const msg = document.getElementById('msg');
+  if (res.ok) {
+    msg.textContent = `Ticket #${data.ticket.id} created.`;
+    msg.className = 'msg success';
+    document.getElementById('ticketForm').reset();
+    loadTickets();
+  } else {
+    msg.textContent = data.message;
+    msg.className = 'msg error';
+  }
+});
+
+loadUsers();
+loadTickets();
+</script>
+
+</body>
+</html>
